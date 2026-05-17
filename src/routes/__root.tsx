@@ -15,6 +15,7 @@ import { CursorGlow } from "../components/fx/CursorGlow";
 import { AuthProvider } from "../hooks/useAuth";
 import { DynamicFavicon } from "../components/brand/DynamicFavicon";
 import { AnimatePresence, motion } from "framer-motion";
+import { Toaster } from "sonner";
 
 function NotFoundComponent() {
   return (
@@ -138,6 +139,17 @@ function RootComponent() {
           </AnimatePresence>
         </main>
         <Footer />
+        <Toaster
+          theme="dark"
+          position="bottom-right"
+          toastOptions={{
+            classNames: {
+              toast:
+                "!bg-background/70 !backdrop-blur-xl !border !border-white/10 !text-foreground !shadow-[var(--shadow-glow)]",
+              description: "!text-muted-foreground",
+            },
+          }}
+        />
       </AuthProvider>
     </QueryClientProvider>
   );

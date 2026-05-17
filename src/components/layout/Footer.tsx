@@ -26,10 +26,18 @@ const LABELS: Record<string, string> = {
 
 function buildHref(platform: string, url: string) {
   if (!url) return "";
-  if (platform === "whatsapp" && !url.startsWith("http")) {
-    return `https://wa.me/${url.replace(/[^0-9]/g, "")}`;
+  const trimmed = url.trim();
+  if (platform === "whatsapp" && !trimmed.startsWith("http")) {
+    return `https://wa.me/${trimmed.replace(/[^0-9]/g, "")}`;
   }
-  return url;
+  if (platform === "telegram" && !trimmed.startsWith("http")) {
+    if (trimmed.startsWith("+") || /^\d+$/.test(trimmed.replace(/[^0-9+]/g, ""))) {
+      const digits = trimmed.replace(/[^0-9]/g, "");
+      return `https://t.me/+${digits}`;
+    }
+    return `https://t.me/${trimmed.replace(/^@/, "")}`;
+  }
+  return trimmed;
 }
 
 export function Footer() {

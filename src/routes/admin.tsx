@@ -1,14 +1,15 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { GlassCard } from "@/components/ui-premium/GlassCard";
 import { useBookingSettings, usePricingPlans, usePricingSettings, useSocialLinks, useSiteSetting, usePortfolioItems, useAllStatsItems } from "@/hooks/useSiteData";
 import { useQueryClient } from "@tanstack/react-query";
-import { LogOut, Save, Plus, Trash2, Image as ImageIcon, Star, BarChart3, Receipt, TrendingUp, QrCode, Download, ExternalLink } from "lucide-react";
+import { LogOut, Save, Plus, Trash2, Image as ImageIcon, Star, BarChart3, Receipt, TrendingUp, QrCode, Download, ExternalLink, Twitter, Instagram, Linkedin, Github, Facebook, MessageCircle, Send as SendIcon } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { createInvoice, markInvoicePaid, updateInvoiceStatus, deleteInvoice, previewFxRate } from "@/lib/payments.functions";
 import { useInvoices, useQrCodes } from "@/hooks/usePayments";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({ meta: [{ title: "Admin — MD Creatives" }, { name: "robots", content: "noindex,nofollow" }] }),
@@ -205,45 +206,137 @@ function SiteTab() {
   );
 }
 
+const SOCIAL_PLATFORMS: { key: string; label: string; placeholder: string; icon: any; kind: "url" | "phone-or-url" }[] = [
+  { key: "twitter", label: "Twitter / X URL", placeholder: "https://x.com/yourhandle", icon: Twitter, kind: "url" },
+  { key: "instagram", label: "Instagram URL", placeholder: "https://instagram.com/yourhandle", icon: Instagram, kind: "url" },
+  { key: "linkedin", label: "LinkedIn URL", placeholder: "https://linkedin.com/company/yourbrand", icon: Linkedin, kind: "url" },
+  { key: "github", label: "GitHub URL", placeholder: "https://github.com/yourhandle", icon: Github, kind: "url" },
+  { key: "facebook", label: "Facebook URL", placeholder: "https://facebook.com/yourpage", icon: Facebook, kind: "url" },
+  { key: "whatsapp", label: "WhatsApp (phone or wa.me URL)", placeholder: "+63 993 930 1966", icon: MessageCircle, kind: "phone-or-url" },
+  { key: "telegram", label: "Telegram (username, phone, or URL)", placeholder: "@yourhandle, +63..., or https://t.me/...", icon: SendIcon, kind: "phone-or-url" },
+];
+
+function validateSocial(platform: string, value: string): string | null {
+  const v = value.trim();
+  if (!v) return null;
+  const isUrl = /^https?:\/\//i.test(v);
+  if (platform === "whatsapp") {
+    if (isUrl) return null;
+    const digits = v.replace(/[^0-9]/g, "");
+    if (digits.length < 7) return "Enter a valid phone number with country code";
+    return null;
+  }
+  if (platform === "telegram") {
+    if (isUrl) return null;
+    if (v.startsWith("@") || /^[a-zA-Z0-9_]{3,}$/.test(v)) return null;
+    const digits = v.replace(/[^0-9]/g, "");
+    if (digits.length >= 7) return null;
+    return "Enter a URL, @username, or phone number";
+  }
+  if (!isUrl) return "Must start with http:// or https://";
+  return null;
+}
+
 function SocialTab() {
   const { data: links = [] } = useSocialLinks();
   const qc = useQueryClient();
   const [draft, setDraft] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+
+  // Map platform key -> existing row id (if any)
+  const byPlatform = useMemo(() => {
+    const m: Record<string, { id: string; url: string; sort_order: number }> = {};
+    links.forEach((l) => (m[l.platform] = { id: l.id, url: l.url, sort_order: l.sort_order }));
+    return m;
+  }, [links]);
 
   useEffect(() => {
     const d: Record<string, string> = {};
-    links.forEach((l) => (d[l.id] = l.url));
+    SOCIAL_PLATFORMS.forEach((p) => {
+      d[p.key] = byPlatform[p.key]?.url ?? "";
+    });
     setDraft(d);
-  }, [links]);
+  }, [byPlatform]);
+
+  const errors = useMemo(() => {
+    const e: Record<string, string | null> = {};
+    SOCIAL_PLATFORMS.forEach((p) => (e[p.key] = validateSocial(p.key, draft[p.key] ?? "")));
+    return e;
+  }, [draft]);
+
+  const hasErrors = Object.values(errors).some(Boolean);
 
   const save = async () => {
-    await Promise.all(
-      links.map((l) =>
-        supabase.from("social_links").update({ url: draft[l.id] ?? "" }).eq("id", l.id)
-      )
-    );
-    qc.invalidateQueries({ queryKey: ["social_links"] });
+    if (hasErrors) {
+      toast.error("Please fix validation errors before saving");
+      return;
+    }
+    setSaving(true);
+    try {
+      // Update existing rows; insert missing ones.
+      const updates = SOCIAL_PLATFORMS.filter((p) => byPlatform[p.key]).map((p) =>
+        supabase
+          .from("social_links")
+          .update({ url: (draft[p.key] ?? "").trim() })
+          .eq("id", byPlatform[p.key].id)
+      );
+      const missing = SOCIAL_PLATFORMS.filter((p) => !byPlatform[p.key]).map((p, i) => ({
+        platform: p.key,
+        url: (draft[p.key] ?? "").trim(),
+        sort_order: SOCIAL_PLATFORMS.findIndex((sp) => sp.key === p.key) + 1,
+      }));
+      const ops: any[] = [...updates];
+      if (missing.length) ops.push(supabase.from("social_links").insert(missing));
+      const results = await Promise.all(ops);
+      const err = results.find((r: any) => r?.error)?.error;
+      if (err) throw err;
+      await qc.invalidateQueries({ queryKey: ["social_links"] });
+      toast.success("Social links saved");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to save social links");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
     <GlassCard className="p-6">
-      <h3 className="text-lg font-bold">Social Links</h3>
+      <h3 className="text-lg font-bold">Social & Contact</h3>
       <p className="mt-1 text-xs text-muted-foreground">
-        Empty URLs will be hidden from the site automatically.
+        Empty fields are hidden from the public site. WhatsApp phone numbers auto-convert to wa.me links; Telegram supports
+        usernames, phone numbers, or full URLs.
       </p>
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
-        {links.map((l) => (
-          <Field key={l.id} label={l.platform}>
-            <input
-              value={draft[l.id] ?? ""}
-              onChange={(e) => setDraft((d) => ({ ...d, [l.id]: e.target.value }))}
-              placeholder={l.platform === "whatsapp" ? "+1234567890" : "https://..."}
-              className={input()}
-            />
-          </Field>
-        ))}
+        {SOCIAL_PLATFORMS.map((p) => {
+          const Icon = p.icon;
+          const err = errors[p.key];
+          return (
+            <div key={p.key}>
+              <Field
+                label={
+                  (
+                    <span className="inline-flex items-center gap-2">
+                      <Icon className="h-3.5 w-3.5 text-primary" />
+                      {p.label}
+                    </span>
+                  ) as any
+                }
+              >
+                <input
+                  value={draft[p.key] ?? ""}
+                  onChange={(e) => setDraft((d) => ({ ...d, [p.key]: e.target.value }))}
+                  placeholder={p.placeholder}
+                  className={input(err ? "ring-1 ring-destructive/60" : "")}
+                />
+              </Field>
+              {err && <p className="mt-1 text-xs text-destructive">{err}</p>}
+            </div>
+          );
+        })}
       </div>
-      <div className="mt-6"><SaveBtn onClick={save} /></div>
+      <div className="mt-6">
+        <SaveBtn onClick={save} label={saving ? "Saving..." : "Save Changes"} />
+      </div>
     </GlassCard>
   );
 }
@@ -433,9 +526,33 @@ function BookingTab() {
   const [d, setD] = useState<any>({});
   useEffect(() => { if (s) setD(s); }, [s]);
 
+  const [saving, setSaving] = useState(false);
   const save = async () => {
-    await supabase.from("booking_settings").update(d).eq("id", 1);
-    qc.invalidateQueries({ queryKey: ["booking_settings"] });
+    // Validation
+    if (d.whatsapp_number && d.whatsapp_number.replace(/[^0-9]/g, "").length < 7) {
+      toast.error("WhatsApp number must include country code");
+      return;
+    }
+    if (d.calendly_url && !/^https?:\/\//i.test(d.calendly_url)) {
+      toast.error("Calendly URL must start with http(s)://");
+      return;
+    }
+    if (d.telegram_url && !/^https?:\/\//i.test(d.telegram_url) && !d.telegram_url.startsWith("@")) {
+      toast.error("Telegram must be a URL or @username");
+      return;
+    }
+    setSaving(true);
+    try {
+      const { id, ...patch } = d;
+      const { error } = await supabase.from("booking_settings").update(patch).eq("id", 1);
+      if (error) throw error;
+      await qc.invalidateQueries({ queryKey: ["booking_settings"] });
+      toast.success("Booking page saved");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to save booking settings");
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (!d.id) return null;
@@ -467,7 +584,7 @@ function BookingTab() {
           </Field>
         </div>
       </div>
-      <div className="mt-5"><SaveBtn onClick={save} /></div>
+      <div className="mt-5"><SaveBtn onClick={save} label={saving ? "Saving..." : "Save Changes"} /></div>
     </GlassCard>
   );
 }
@@ -477,27 +594,48 @@ function PortfolioTab() {
   const qc = useQueryClient();
 
   const add = async () => {
-    await supabase.from("portfolio_items").insert({ title: "New Project", sort_order: items.length + 1 });
+    const { error } = await supabase.from("portfolio_items").insert({ title: "New Project", sort_order: items.length + 1 });
+    if (error) { toast.error(error.message); return; }
     qc.invalidateQueries({ queryKey: ["portfolio_items"] });
+    toast.success("Project added");
   };
   const update = async (id: string, patch: any) => {
-    await supabase.from("portfolio_items").update(patch).eq("id", id);
+    if (patch.project_url && patch.project_url.trim() && !/^https?:\/\//i.test(patch.project_url.trim())) {
+      toast.error("Project URL must start with http(s):// — or leave it empty");
+      return;
+    }
+    const { id: _omit, created_at, updated_at, ...clean } = patch;
+    const { error } = await supabase.from("portfolio_items").update(clean).eq("id", id);
+    if (error) { toast.error(error.message); return; }
     qc.invalidateQueries({ queryKey: ["portfolio_items"] });
+    toast.success("Project saved");
   };
   const remove = async (id: string) => {
     if (!confirm("Delete this project?")) return;
-    await supabase.from("portfolio_items").delete().eq("id", id);
+    const { error } = await supabase.from("portfolio_items").delete().eq("id", id);
+    if (error) { toast.error(error.message); return; }
     qc.invalidateQueries({ queryKey: ["portfolio_items"] });
+    toast.success("Project deleted");
   };
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-bold">Portfolio Projects</h3>
+        <div>
+          <h3 className="text-lg font-bold">Portfolio Projects</h3>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Upload an image and a title — that's enough to publish. Project URL is optional.
+          </p>
+        </div>
         <button onClick={add} className="inline-flex items-center gap-1.5 rounded-full bg-white/5 px-4 py-2 text-sm hover:bg-white/10">
           <Plus className="h-3.5 w-3.5" /> Add project
         </button>
       </div>
+      {items.length === 0 && (
+        <GlassCard className="p-8 text-center text-sm text-muted-foreground">
+          No projects yet. Click "Add project" to publish your first one.
+        </GlassCard>
+      )}
       {items.map((item) => <PortfolioRow key={item.id} item={item} onSave={update} onDelete={remove} />)}
     </div>
   );
@@ -512,9 +650,12 @@ function PortfolioRow({ item, onSave, onDelete }: { item: any; onSave: (id: stri
     const ext = file.name.split(".").pop();
     const path = `${item.id}-${Date.now()}.${ext}`;
     const { error } = await supabase.storage.from("portfolio").upload(path, file, { upsert: true });
-    if (!error) {
+    if (error) {
+      toast.error(error.message);
+    } else {
       const { data } = supabase.storage.from("portfolio").getPublicUrl(path);
       setD({ ...d, image_url: data.publicUrl });
+      toast.success("Image uploaded — remember to save");
     }
     setUploading(false);
   };
@@ -534,7 +675,7 @@ function PortfolioRow({ item, onSave, onDelete }: { item: any; onSave: (id: stri
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Title"><input value={d.title} onChange={(e) => setD({ ...d, title: e.target.value })} className={input()} /></Field>
           <Field label="Category"><input value={d.category} onChange={(e) => setD({ ...d, category: e.target.value })} className={input()} /></Field>
-          <Field label="Project URL"><input value={d.project_url ?? ""} onChange={(e) => setD({ ...d, project_url: e.target.value })} className={input()} /></Field>
+          <Field label="Project URL (optional)"><input value={d.project_url ?? ""} onChange={(e) => setD({ ...d, project_url: e.target.value })} className={input()} placeholder="https://… (leave empty if none)" /></Field>
           <Field label="Sort order"><input type="number" value={d.sort_order} onChange={(e) => setD({ ...d, sort_order: +e.target.value })} className={input()} /></Field>
           <div className="sm:col-span-2">
             <Field label="Description"><textarea rows={2} value={d.description} onChange={(e) => setD({ ...d, description: e.target.value })} className={input("resize-none")} /></Field>
