@@ -675,7 +675,7 @@ function PortfolioRow({ item, onSave, onDelete }: { item: any; onSave: (id: stri
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Title"><input value={d.title} onChange={(e) => setD({ ...d, title: e.target.value })} className={input()} /></Field>
           <Field label="Category"><input value={d.category} onChange={(e) => setD({ ...d, category: e.target.value })} className={input()} /></Field>
-          <Field label="Project URL"><input value={d.project_url ?? ""} onChange={(e) => setD({ ...d, project_url: e.target.value })} className={input()} /></Field>
+          <Field label="Project URL (optional)"><input value={d.project_url ?? ""} onChange={(e) => setD({ ...d, project_url: e.target.value })} className={input()} placeholder="https://… (leave empty if none)" /></Field>
           <Field label="Sort order"><input type="number" value={d.sort_order} onChange={(e) => setD({ ...d, sort_order: +e.target.value })} className={input()} /></Field>
           <div className="sm:col-span-2">
             <Field label="Description"><textarea rows={2} value={d.description} onChange={(e) => setD({ ...d, description: e.target.value })} className={input("resize-none")} /></Field>
