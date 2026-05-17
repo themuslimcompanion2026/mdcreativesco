@@ -526,9 +526,33 @@ function BookingTab() {
   const [d, setD] = useState<any>({});
   useEffect(() => { if (s) setD(s); }, [s]);
 
+  const [saving, setSaving] = useState(false);
   const save = async () => {
-    await supabase.from("booking_settings").update(d).eq("id", 1);
-    qc.invalidateQueries({ queryKey: ["booking_settings"] });
+    // Validation
+    if (d.whatsapp_number && d.whatsapp_number.replace(/[^0-9]/g, "").length < 7) {
+      toast.error("WhatsApp number must include country code");
+      return;
+    }
+    if (d.calendly_url && !/^https?:\/\//i.test(d.calendly_url)) {
+      toast.error("Calendly URL must start with http(s)://");
+      return;
+    }
+    if (d.telegram_url && !/^https?:\/\//i.test(d.telegram_url) && !d.telegram_url.startsWith("@")) {
+      toast.error("Telegram must be a URL or @username");
+      return;
+    }
+    setSaving(true);
+    try {
+      const { id, ...patch } = d;
+      const { error } = await supabase.from("booking_settings").update(patch).eq("id", 1);
+      if (error) throw error;
+      await qc.invalidateQueries({ queryKey: ["booking_settings"] });
+      toast.success("Booking page saved");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to save booking settings");
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (!d.id) return null;
@@ -560,7 +584,7 @@ function BookingTab() {
           </Field>
         </div>
       </div>
-      <div className="mt-5"><SaveBtn onClick={save} /></div>
+      <div className="mt-5"><SaveBtn onClick={save} label={saving ? "Saving..." : "Save Changes"} /></div>
     </GlassCard>
   );
 }
