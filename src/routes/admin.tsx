@@ -206,45 +206,137 @@ function SiteTab() {
   );
 }
 
+const SOCIAL_PLATFORMS: { key: string; label: string; placeholder: string; icon: any; kind: "url" | "phone-or-url" }[] = [
+  { key: "twitter", label: "Twitter / X URL", placeholder: "https://x.com/yourhandle", icon: Twitter, kind: "url" },
+  { key: "instagram", label: "Instagram URL", placeholder: "https://instagram.com/yourhandle", icon: Instagram, kind: "url" },
+  { key: "linkedin", label: "LinkedIn URL", placeholder: "https://linkedin.com/company/yourbrand", icon: Linkedin, kind: "url" },
+  { key: "github", label: "GitHub URL", placeholder: "https://github.com/yourhandle", icon: Github, kind: "url" },
+  { key: "facebook", label: "Facebook URL", placeholder: "https://facebook.com/yourpage", icon: Facebook, kind: "url" },
+  { key: "whatsapp", label: "WhatsApp (phone or wa.me URL)", placeholder: "+63 993 930 1966", icon: MessageCircle, kind: "phone-or-url" },
+  { key: "telegram", label: "Telegram (username, phone, or URL)", placeholder: "@yourhandle, +63..., or https://t.me/...", icon: SendIcon, kind: "phone-or-url" },
+];
+
+function validateSocial(platform: string, value: string): string | null {
+  const v = value.trim();
+  if (!v) return null;
+  const isUrl = /^https?:\/\//i.test(v);
+  if (platform === "whatsapp") {
+    if (isUrl) return null;
+    const digits = v.replace(/[^0-9]/g, "");
+    if (digits.length < 7) return "Enter a valid phone number with country code";
+    return null;
+  }
+  if (platform === "telegram") {
+    if (isUrl) return null;
+    if (v.startsWith("@") || /^[a-zA-Z0-9_]{3,}$/.test(v)) return null;
+    const digits = v.replace(/[^0-9]/g, "");
+    if (digits.length >= 7) return null;
+    return "Enter a URL, @username, or phone number";
+  }
+  if (!isUrl) return "Must start with http:// or https://";
+  return null;
+}
+
 function SocialTab() {
   const { data: links = [] } = useSocialLinks();
   const qc = useQueryClient();
   const [draft, setDraft] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+
+  // Map platform key -> existing row id (if any)
+  const byPlatform = useMemo(() => {
+    const m: Record<string, { id: string; url: string; sort_order: number }> = {};
+    links.forEach((l) => (m[l.platform] = { id: l.id, url: l.url, sort_order: l.sort_order }));
+    return m;
+  }, [links]);
 
   useEffect(() => {
     const d: Record<string, string> = {};
-    links.forEach((l) => (d[l.id] = l.url));
+    SOCIAL_PLATFORMS.forEach((p) => {
+      d[p.key] = byPlatform[p.key]?.url ?? "";
+    });
     setDraft(d);
-  }, [links]);
+  }, [byPlatform]);
+
+  const errors = useMemo(() => {
+    const e: Record<string, string | null> = {};
+    SOCIAL_PLATFORMS.forEach((p) => (e[p.key] = validateSocial(p.key, draft[p.key] ?? "")));
+    return e;
+  }, [draft]);
+
+  const hasErrors = Object.values(errors).some(Boolean);
 
   const save = async () => {
-    await Promise.all(
-      links.map((l) =>
-        supabase.from("social_links").update({ url: draft[l.id] ?? "" }).eq("id", l.id)
-      )
-    );
-    qc.invalidateQueries({ queryKey: ["social_links"] });
+    if (hasErrors) {
+      toast.error("Please fix validation errors before saving");
+      return;
+    }
+    setSaving(true);
+    try {
+      // Update existing rows; insert missing ones.
+      const updates = SOCIAL_PLATFORMS.filter((p) => byPlatform[p.key]).map((p) =>
+        supabase
+          .from("social_links")
+          .update({ url: (draft[p.key] ?? "").trim() })
+          .eq("id", byPlatform[p.key].id)
+      );
+      const missing = SOCIAL_PLATFORMS.filter((p) => !byPlatform[p.key]).map((p, i) => ({
+        platform: p.key,
+        url: (draft[p.key] ?? "").trim(),
+        sort_order: SOCIAL_PLATFORMS.findIndex((sp) => sp.key === p.key) + 1,
+      }));
+      const ops: Promise<any>[] = [...updates];
+      if (missing.length) ops.push(supabase.from("social_links").insert(missing));
+      const results = await Promise.all(ops);
+      const err = results.find((r: any) => r?.error)?.error;
+      if (err) throw err;
+      await qc.invalidateQueries({ queryKey: ["social_links"] });
+      toast.success("Social links saved");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to save social links");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
     <GlassCard className="p-6">
-      <h3 className="text-lg font-bold">Social Links</h3>
+      <h3 className="text-lg font-bold">Social & Contact</h3>
       <p className="mt-1 text-xs text-muted-foreground">
-        Empty URLs will be hidden from the site automatically.
+        Empty fields are hidden from the public site. WhatsApp phone numbers auto-convert to wa.me links; Telegram supports
+        usernames, phone numbers, or full URLs.
       </p>
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
-        {links.map((l) => (
-          <Field key={l.id} label={l.platform}>
-            <input
-              value={draft[l.id] ?? ""}
-              onChange={(e) => setDraft((d) => ({ ...d, [l.id]: e.target.value }))}
-              placeholder={l.platform === "whatsapp" ? "+1234567890" : "https://..."}
-              className={input()}
-            />
-          </Field>
-        ))}
+        {SOCIAL_PLATFORMS.map((p) => {
+          const Icon = p.icon;
+          const err = errors[p.key];
+          return (
+            <div key={p.key}>
+              <Field
+                label={
+                  (
+                    <span className="inline-flex items-center gap-2">
+                      <Icon className="h-3.5 w-3.5 text-primary" />
+                      {p.label}
+                    </span>
+                  ) as any
+                }
+              >
+                <input
+                  value={draft[p.key] ?? ""}
+                  onChange={(e) => setDraft((d) => ({ ...d, [p.key]: e.target.value }))}
+                  placeholder={p.placeholder}
+                  className={input(err ? "ring-1 ring-destructive/60" : "")}
+                />
+              </Field>
+              {err && <p className="mt-1 text-xs text-destructive">{err}</p>}
+            </div>
+          );
+        })}
       </div>
-      <div className="mt-6"><SaveBtn onClick={save} /></div>
+      <div className="mt-6">
+        <SaveBtn onClick={save} label={saving ? "Saving..." : "Save Changes"} />
+      </div>
     </GlassCard>
   );
 }
