@@ -285,7 +285,7 @@ function SocialTab() {
         url: (draft[p.key] ?? "").trim(),
         sort_order: SOCIAL_PLATFORMS.findIndex((sp) => sp.key === p.key) + 1,
       }));
-      const ops: Promise<any>[] = [...updates];
+      const ops: any[] = [...updates];
       if (missing.length) ops.push(supabase.from("social_links").insert(missing));
       const results = await Promise.all(ops);
       const err = results.find((r: any) => r?.error)?.error;
