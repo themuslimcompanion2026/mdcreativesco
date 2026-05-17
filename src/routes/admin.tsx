@@ -1,14 +1,15 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { GlassCard } from "@/components/ui-premium/GlassCard";
 import { useBookingSettings, usePricingPlans, usePricingSettings, useSocialLinks, useSiteSetting, usePortfolioItems, useAllStatsItems } from "@/hooks/useSiteData";
 import { useQueryClient } from "@tanstack/react-query";
-import { LogOut, Save, Plus, Trash2, Image as ImageIcon, Star, BarChart3, Receipt, TrendingUp, QrCode, Download, ExternalLink } from "lucide-react";
+import { LogOut, Save, Plus, Trash2, Image as ImageIcon, Star, BarChart3, Receipt, TrendingUp, QrCode, Download, ExternalLink, Twitter, Instagram, Linkedin, Github, Facebook, MessageCircle, Send as SendIcon } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { createInvoice, markInvoicePaid, updateInvoiceStatus, deleteInvoice, previewFxRate } from "@/lib/payments.functions";
 import { useInvoices, useQrCodes } from "@/hooks/usePayments";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({ meta: [{ title: "Admin — MD Creatives" }, { name: "robots", content: "noindex,nofollow" }] }),
