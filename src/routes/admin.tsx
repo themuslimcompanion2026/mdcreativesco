@@ -650,9 +650,12 @@ function PortfolioRow({ item, onSave, onDelete }: { item: any; onSave: (id: stri
     const ext = file.name.split(".").pop();
     const path = `${item.id}-${Date.now()}.${ext}`;
     const { error } = await supabase.storage.from("portfolio").upload(path, file, { upsert: true });
-    if (!error) {
+    if (error) {
+      toast.error(error.message);
+    } else {
       const { data } = supabase.storage.from("portfolio").getPublicUrl(path);
       setD({ ...d, image_url: data.publicUrl });
+      toast.success("Image uploaded — remember to save");
     }
     setUploading(false);
   };
