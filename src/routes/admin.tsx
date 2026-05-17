@@ -594,27 +594,48 @@ function PortfolioTab() {
   const qc = useQueryClient();
 
   const add = async () => {
-    await supabase.from("portfolio_items").insert({ title: "New Project", sort_order: items.length + 1 });
+    const { error } = await supabase.from("portfolio_items").insert({ title: "New Project", sort_order: items.length + 1 });
+    if (error) { toast.error(error.message); return; }
     qc.invalidateQueries({ queryKey: ["portfolio_items"] });
+    toast.success("Project added");
   };
   const update = async (id: string, patch: any) => {
-    await supabase.from("portfolio_items").update(patch).eq("id", id);
+    if (patch.project_url && patch.project_url.trim() && !/^https?:\/\//i.test(patch.project_url.trim())) {
+      toast.error("Project URL must start with http(s):// — or leave it empty");
+      return;
+    }
+    const { id: _omit, created_at, updated_at, ...clean } = patch;
+    const { error } = await supabase.from("portfolio_items").update(clean).eq("id", id);
+    if (error) { toast.error(error.message); return; }
     qc.invalidateQueries({ queryKey: ["portfolio_items"] });
+    toast.success("Project saved");
   };
   const remove = async (id: string) => {
     if (!confirm("Delete this project?")) return;
-    await supabase.from("portfolio_items").delete().eq("id", id);
+    const { error } = await supabase.from("portfolio_items").delete().eq("id", id);
+    if (error) { toast.error(error.message); return; }
     qc.invalidateQueries({ queryKey: ["portfolio_items"] });
+    toast.success("Project deleted");
   };
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-bold">Portfolio Projects</h3>
+        <div>
+          <h3 className="text-lg font-bold">Portfolio Projects</h3>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Upload an image and a title — that's enough to publish. Project URL is optional.
+          </p>
+        </div>
         <button onClick={add} className="inline-flex items-center gap-1.5 rounded-full bg-white/5 px-4 py-2 text-sm hover:bg-white/10">
           <Plus className="h-3.5 w-3.5" /> Add project
         </button>
       </div>
+      {items.length === 0 && (
+        <GlassCard className="p-8 text-center text-sm text-muted-foreground">
+          No projects yet. Click "Add project" to publish your first one.
+        </GlassCard>
+      )}
       {items.map((item) => <PortfolioRow key={item.id} item={item} onSave={update} onDelete={remove} />)}
     </div>
   );
