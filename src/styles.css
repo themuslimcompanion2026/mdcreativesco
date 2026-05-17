@@ -199,7 +199,7 @@
   }
   select option,
   select optgroup {
-    background-color: #0b0d14;
+    background-color: oklch(0.15 0.025 265);
     color: #f1f3f9;
     padding: 8px 12px;
   }
