@@ -357,9 +357,23 @@ function PricingTab() {
     }
   }, [settings]);
 
+  const [savingSettings, setSavingSettings] = useState(false);
   const saveSettings = async () => {
-    await supabase.from("pricing_settings").update({ visible, heading, subheading }).eq("id", 1);
-    qc.invalidateQueries({ queryKey: ["pricing_settings"] });
+    if (!heading.trim() || !subheading.trim()) {
+      toast.error("Heading and subheading cannot be empty.");
+      return;
+    }
+    setSavingSettings(true);
+    const { error } = await supabase
+      .from("pricing_settings")
+      .upsert(
+        { id: 1, visible, heading: heading.trim(), subheading: subheading.trim(), updated_at: new Date().toISOString() },
+        { onConflict: "id" },
+      );
+    setSavingSettings(false);
+    if (error) { toast.error(error.message); return; }
+    await qc.invalidateQueries({ queryKey: ["pricing_settings"] });
+    toast.success("Pricing section saved.");
   };
 
   const addPlan = async () => {
