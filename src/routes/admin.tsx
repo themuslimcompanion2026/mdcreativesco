@@ -537,29 +537,58 @@ function PlanEditor({ plan, onSave, onDelete }: { plan: any; onSave: (id: string
 function BookingTab() {
   const { data: s } = useBookingSettings();
   const qc = useQueryClient();
-  const [d, setD] = useState<any>({});
-  useEffect(() => { if (s) setD(s); }, [s]);
+  const [d, setD] = useState<any>({
+    id: 1,
+    enabled: true,
+    heading: "Book a Strategy Call",
+    subheading: "A 30-minute call to map your project, audience, and conversion goals.",
+    whatsapp_number: "",
+    telegram_url: "",
+    calendly_url: "",
+    cta_primary_label: "Schedule Call",
+    cta_secondary_label: "Send a Message",
+    details_md: "",
+  });
+  useEffect(() => { if (s) setD((prev: any) => ({ ...prev, ...s })); }, [s]);
 
   const [saving, setSaving] = useState(false);
+
+  const normalizeTelegram = (v: string) => {
+    const t = v.trim();
+    if (!t) return "";
+    if (/^https?:\/\//i.test(t)) return t;
+    return `https://t.me/${t.replace(/^@/, "")}`;
+  };
+
   const save = async () => {
-    // Validation
-    if (d.whatsapp_number && d.whatsapp_number.replace(/[^0-9]/g, "").length < 7) {
-      toast.error("WhatsApp number must include country code");
-      return;
+    if (!d.heading?.trim()) { toast.error("Heading is required."); return; }
+    const wa = (d.whatsapp_number ?? "").replace(/[^0-9]/g, "");
+    if (wa && wa.length < 7) { toast.error("WhatsApp number must include country code."); return; }
+    if (d.calendly_url && !/^https?:\/\//i.test(d.calendly_url.trim())) {
+      toast.error("Calendly URL must start with http(s)://"); return;
     }
-    if (d.calendly_url && !/^https?:\/\//i.test(d.calendly_url)) {
-      toast.error("Calendly URL must start with http(s)://");
-      return;
-    }
-    if (d.telegram_url && !/^https?:\/\//i.test(d.telegram_url) && !d.telegram_url.startsWith("@")) {
-      toast.error("Telegram must be a URL or @username");
-      return;
-    }
+    const telegram = normalizeTelegram(d.telegram_url ?? "");
+
     setSaving(true);
     try {
-      const { id, ...patch } = d;
-      const { error } = await supabase.from("booking_settings").update(patch).eq("id", 1);
+      const payload = {
+        id: 1,
+        enabled: !!d.enabled,
+        heading: d.heading.trim(),
+        subheading: (d.subheading ?? "").trim(),
+        whatsapp_number: wa,
+        telegram_url: telegram,
+        calendly_url: (d.calendly_url ?? "").trim(),
+        cta_primary_label: (d.cta_primary_label ?? "Schedule Call").trim() || "Schedule Call",
+        cta_secondary_label: (d.cta_secondary_label ?? "Send a Message").trim() || "Send a Message",
+        details_md: d.details_md ?? "",
+        updated_at: new Date().toISOString(),
+      };
+      const { error } = await supabase
+        .from("booking_settings")
+        .upsert(payload, { onConflict: "id" });
       if (error) throw error;
+      setD((prev: any) => ({ ...prev, telegram_url: telegram, whatsapp_number: wa }));
       await qc.invalidateQueries({ queryKey: ["booking_settings"] });
       toast.success("Booking page saved");
     } catch (e: any) {
@@ -568,8 +597,6 @@ function BookingTab() {
       setSaving(false);
     }
   };
-
-  if (!d.id) return null;
 
   return (
     <GlassCard className="p-6">
@@ -586,19 +613,25 @@ function BookingTab() {
         </label>
       </div>
       <div className="mt-5 grid gap-3 md:grid-cols-2">
-        <Field label="Heading"><input value={d.heading ?? ""} onChange={(e) => setD({ ...d, heading: e.target.value })} className={input()} /></Field>
-        <Field label="Subheading"><input value={d.subheading ?? ""} onChange={(e) => setD({ ...d, subheading: e.target.value })} className={input()} /></Field>
+        <Field label="Heading"><input value={d.heading ?? ""} onChange={(e) => setD({ ...d, heading: e.target.value })} className={input()} placeholder="Book a Strategy Call" /></Field>
+        <Field label="Primary CTA label"><input value={d.cta_primary_label ?? ""} onChange={(e) => setD({ ...d, cta_primary_label: e.target.value })} className={input()} placeholder="Schedule Call" /></Field>
+        <div className="md:col-span-2">
+          <Field label="Subheading">
+            <textarea rows={2} value={d.subheading ?? ""} onChange={(e) => setD({ ...d, subheading: e.target.value })} className={input("resize-none")} placeholder="A 30-minute call to map your project, audience, and conversion goals." />
+          </Field>
+        </div>
         <Field label="WhatsApp number (digits only)"><input value={d.whatsapp_number ?? ""} onChange={(e) => setD({ ...d, whatsapp_number: e.target.value })} className={input()} placeholder="+1234567890" /></Field>
-        <Field label="Telegram URL"><input value={d.telegram_url ?? ""} onChange={(e) => setD({ ...d, telegram_url: e.target.value })} className={input()} placeholder="https://t.me/yourhandle" /></Field>
-        <Field label="Calendly / scheduling embed URL"><input value={d.calendly_url ?? ""} onChange={(e) => setD({ ...d, calendly_url: e.target.value })} className={input()} placeholder="https://calendly.com/..." /></Field>
-        <Field label="Primary CTA label"><input value={d.cta_primary_label ?? ""} onChange={(e) => setD({ ...d, cta_primary_label: e.target.value })} className={input()} /></Field>
+        <Field label="Telegram URL or @username"><input value={d.telegram_url ?? ""} onChange={(e) => setD({ ...d, telegram_url: e.target.value })} className={input()} placeholder="https://t.me/yourhandle or @yourhandle" /></Field>
+        <div className="md:col-span-2">
+          <Field label="Calendly / scheduling embed URL"><input value={d.calendly_url ?? ""} onChange={(e) => setD({ ...d, calendly_url: e.target.value })} className={input()} placeholder="https://calendly.com/..." /></Field>
+        </div>
         <div className="md:col-span-2">
           <Field label="What you get (free text, supports line breaks)">
-            <textarea rows={4} value={d.details_md ?? ""} onChange={(e) => setD({ ...d, details_md: e.target.value })} className={input("resize-none")} />
+            <textarea rows={5} value={d.details_md ?? ""} onChange={(e) => setD({ ...d, details_md: e.target.value })} className={input("resize-none")} placeholder={"Strategy roadmap\nConversion audit\nNext-step plan"} />
           </Field>
         </div>
       </div>
-      <div className="mt-5"><SaveBtn onClick={save} label={saving ? "Saving..." : "Save Changes"} /></div>
+      <div className="mt-5"><SaveBtn onClick={save} label={saving ? "Saving…" : "Save Changes"} /></div>
     </GlassCard>
   );
 }
