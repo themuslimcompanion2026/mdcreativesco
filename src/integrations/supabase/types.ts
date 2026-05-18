@@ -236,34 +236,46 @@ export type Database = {
       }
       payment_qr_codes: {
         Row: {
+          account_name: string | null
+          account_number: string | null
           active: boolean
           created_at: string
           currency: string
+          description: string | null
           id: string
           image_url: string
           label: string
+          payment_link: string | null
           plan_id: string | null
           sort_order: number
           updated_at: string
         }
         Insert: {
+          account_name?: string | null
+          account_number?: string | null
           active?: boolean
           created_at?: string
           currency?: string
+          description?: string | null
           id?: string
           image_url: string
           label: string
+          payment_link?: string | null
           plan_id?: string | null
           sort_order?: number
           updated_at?: string
         }
         Update: {
+          account_name?: string | null
+          account_number?: string | null
           active?: boolean
           created_at?: string
           currency?: string
+          description?: string | null
           id?: string
           image_url?: string
           label?: string
+          payment_link?: string | null
           plan_id?: string | null
           sort_order?: number
           updated_at?: string
