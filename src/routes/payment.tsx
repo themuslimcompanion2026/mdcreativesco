@@ -62,15 +62,6 @@ function PaymentPage() {
     return () => { active = false; };
   }, [usd, currency, selectedPlan, isCustomQuote, fx]);
 
-  const matchedQr = useMemo(() => {
-    if (!qrCodes.length) return null;
-    return (
-      qrCodes.find((q: any) => q.plan_id === planId && q.currency === currency) ||
-      qrCodes.find((q: any) => q.plan_id === planId) ||
-      qrCodes.find((q: any) => q.currency === currency) ||
-      qrCodes[0]
-    );
-  }, [qrCodes, planId, currency]);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
