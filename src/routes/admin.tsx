@@ -357,9 +357,23 @@ function PricingTab() {
     }
   }, [settings]);
 
+  const [savingSettings, setSavingSettings] = useState(false);
   const saveSettings = async () => {
-    await supabase.from("pricing_settings").update({ visible, heading, subheading }).eq("id", 1);
-    qc.invalidateQueries({ queryKey: ["pricing_settings"] });
+    if (!heading.trim() || !subheading.trim()) {
+      toast.error("Heading and subheading cannot be empty.");
+      return;
+    }
+    setSavingSettings(true);
+    const { error } = await supabase
+      .from("pricing_settings")
+      .upsert(
+        { id: 1, visible, heading: heading.trim(), subheading: subheading.trim(), updated_at: new Date().toISOString() },
+        { onConflict: "id" },
+      );
+    setSavingSettings(false);
+    if (error) { toast.error(error.message); return; }
+    await qc.invalidateQueries({ queryKey: ["pricing_settings"] });
+    toast.success("Pricing section saved.");
   };
 
   const addPlan = async () => {
@@ -399,7 +413,7 @@ function PricingTab() {
           <Field label="Heading"><input value={heading} onChange={(e) => setHeading(e.target.value)} className={input()} /></Field>
           <Field label="Subheading"><input value={subheading} onChange={(e) => setSubheading(e.target.value)} className={input()} /></Field>
         </div>
-        <div className="mt-5"><SaveBtn onClick={saveSettings} /></div>
+        <div className="mt-5"><SaveBtn onClick={saveSettings} label={savingSettings ? "Saving…" : "Save Changes"} /></div>
       </GlassCard>
 
       <div className="flex items-center justify-between">
@@ -1082,10 +1096,15 @@ function QrCodeManager() {
   const [label, setLabel] = useState("");
   const [planId, setPlanId] = useState("");
   const [currency, setCurrency] = useState("USD");
+  const [accountName, setAccountName] = useState("");
+  const [accountNumber, setAccountNumber] = useState("");
+  const [description, setDescription] = useState("");
+  const [paymentLink, setPaymentLink] = useState("");
   const [uploading, setUploading] = useState(false);
 
   const upload = async (file: File) => {
-    if (!label) { alert("Add a label first"); return; }
+    if (!label.trim()) { toast.error("Add a payment method name first."); return; }
+    if (file.size > 5 * 1024 * 1024) { toast.error("Image must be under 5MB."); return; }
     setUploading(true);
     try {
       const ext = file.name.split(".").pop();
@@ -1093,11 +1112,23 @@ function QrCodeManager() {
       const { error: upErr } = await supabase.storage.from("payment-qr").upload(path, file);
       if (upErr) throw upErr;
       const { data } = supabase.storage.from("payment-qr").getPublicUrl(path);
-      await supabase.from("payment_qr_codes").insert({ label, plan_id: planId || null, currency, image_url: data.publicUrl });
-      setLabel(""); setPlanId("");
-      qc.invalidateQueries({ queryKey: ["payment_qr_codes"] });
+      const { error: insErr } = await supabase.from("payment_qr_codes").insert({
+        label: label.trim(),
+        plan_id: planId || null,
+        currency,
+        image_url: data.publicUrl,
+        account_name: accountName.trim() || null,
+        account_number: accountNumber.trim() || null,
+        description: description.trim() || null,
+        payment_link: paymentLink.trim() || null,
+        sort_order: qrCodes.length,
+      } as any);
+      if (insErr) throw insErr;
+      setLabel(""); setPlanId(""); setAccountName(""); setAccountNumber(""); setDescription(""); setPaymentLink("");
+      await qc.invalidateQueries({ queryKey: ["payment_qr_codes"] });
+      toast.success("Payment method added.");
     } catch (e: any) {
-      alert(e.message);
+      toast.error(e.message ?? "Upload failed.");
     } finally { setUploading(false); }
   };
 
@@ -1106,21 +1137,34 @@ function QrCodeManager() {
     qc.invalidateQueries({ queryKey: ["payment_qr_codes"] });
   };
   const remove = async (id: string) => {
-    if (!confirm("Delete this QR code?")) return;
+    if (!confirm("Delete this payment method?")) return;
     await supabase.from("payment_qr_codes").delete().eq("id", id);
+    qc.invalidateQueries({ queryKey: ["payment_qr_codes"] });
+    toast.success("Removed.");
+  };
+  const reorder = async (id: string, direction: -1 | 1) => {
+    const idx = qrCodes.findIndex((q: any) => q.id === id);
+    const swap = qrCodes[idx + direction];
+    if (!swap) return;
+    await Promise.all([
+      supabase.from("payment_qr_codes").update({ sort_order: (swap as any).sort_order }).eq("id", id),
+      supabase.from("payment_qr_codes").update({ sort_order: (qrCodes[idx] as any).sort_order }).eq("id", (swap as any).id),
+    ]);
     qc.invalidateQueries({ queryKey: ["payment_qr_codes"] });
   };
 
   return (
     <GlassCard className="p-6">
-      <div className="flex items-center gap-2"><QrCode className="h-4 w-4 text-primary" /><h3 className="text-lg font-bold">QR Code Management</h3></div>
-      <p className="mt-1 text-xs text-muted-foreground">Upload payment QR codes shown on the invoice page. Plan-linked QR is auto-matched per invoice.</p>
+      <div className="flex items-center gap-2"><QrCode className="h-4 w-4 text-primary" /><h3 className="text-lg font-bold">Payment Methods & QR Codes</h3></div>
+      <p className="mt-1 text-xs text-muted-foreground">Add unlimited payment methods (GCash, Maya, PayPal, Bank, Crypto, etc). Customers will see all active methods on the checkout page.</p>
 
-      <div className="mt-5 grid gap-3 md:grid-cols-4">
-        <Field label="Label"><input value={label} onChange={(e) => setLabel(e.target.value)} className={input()} placeholder="e.g. $500 Plan QR" /></Field>
+      <div className="mt-5 grid gap-3 md:grid-cols-3">
+        <Field label="Method name *"><input value={label} onChange={(e) => setLabel(e.target.value)} className={input()} placeholder="e.g. GCash, Maya, PayPal" /></Field>
+        <Field label="Account name (optional)"><input value={accountName} onChange={(e) => setAccountName(e.target.value)} className={input()} placeholder="e.g. Juan Dela Cruz" /></Field>
+        <Field label="Account number (optional)"><input value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} className={input()} placeholder="e.g. 0917•••1234" /></Field>
         <Field label="Linked plan (optional)">
           <select value={planId} onChange={(e) => setPlanId(e.target.value)} className={input()}>
-            <option value="">— Fallback (any plan) —</option>
+            <option value="">— Any plan —</option>
             {plans.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
         </Field>
@@ -1129,28 +1173,41 @@ function QrCodeManager() {
             {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         </Field>
-        <Field label="Upload QR image">
+        <Field label="Payment link (optional)"><input value={paymentLink} onChange={(e) => setPaymentLink(e.target.value)} className={input()} placeholder="https://paypal.me/yourhandle" /></Field>
+        <Field label="Instructions / description (optional)">
+          <input value={description} onChange={(e) => setDescription(e.target.value)} className={input()} placeholder="Scan & send proof to email" />
+        </Field>
+        <Field label="Upload QR image *">
           <input type="file" accept="image/*" disabled={uploading} onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} className={input()} />
         </Field>
+        {uploading && <div className="md:col-span-3 text-xs text-primary">Uploading…</div>}
       </div>
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {qrCodes.map((q: any) => (
+        {qrCodes.map((q: any, i: number) => (
           <div key={q.id} className="glass rounded-xl p-4">
             <img src={q.image_url} alt={q.label} className="aspect-square w-full rounded-lg bg-white p-2 object-contain" />
             <div className="mt-3 flex items-start justify-between gap-2">
-              <div>
-                <div className="font-semibold text-sm">{q.label}</div>
-                <div className="text-[10px] text-muted-foreground">{q.currency} · {q.plan_id ? "Plan-linked" : "Fallback"}</div>
+              <div className="min-w-0 flex-1">
+                <div className="font-semibold text-sm truncate">{q.label}</div>
+                <div className="text-[10px] text-muted-foreground">{q.currency} · {q.plan_id ? "Plan-linked" : "Any plan"}</div>
+                {q.account_name && <div className="mt-1 text-[11px] text-foreground/80 truncate">{q.account_name}</div>}
+                {q.account_number && <div className="text-[11px] text-muted-foreground truncate font-mono">{q.account_number}</div>}
+                {q.payment_link && <a href={q.payment_link} target="_blank" rel="noreferrer" className="mt-1 inline-flex items-center gap-1 text-[11px] text-primary hover:underline"><ExternalLink className="h-3 w-3" />link</a>}
+                {q.description && <div className="mt-1 text-[10px] text-muted-foreground line-clamp-2">{q.description}</div>}
               </div>
-              <div className="flex gap-1">
+              <div className="flex flex-col gap-1">
+                <div className="flex gap-1">
+                  <button title="Move up" onClick={() => reorder(q.id, -1)} disabled={i === 0} className="rounded-md px-1.5 py-0.5 text-[10px] bg-white/5 hover:bg-white/10 disabled:opacity-30">↑</button>
+                  <button title="Move down" onClick={() => reorder(q.id, 1)} disabled={i === qrCodes.length - 1} className="rounded-md px-1.5 py-0.5 text-[10px] bg-white/5 hover:bg-white/10 disabled:opacity-30">↓</button>
+                </div>
                 <button onClick={() => toggle(q.id, !q.active)} className={`rounded-md px-2 py-1 text-[10px] ${q.active ? "bg-green-500/15 text-green-300" : "bg-white/5 text-muted-foreground"}`}>{q.active ? "Active" : "Off"}</button>
                 <button onClick={() => remove(q.id)} className="rounded-md p-1 text-destructive hover:bg-destructive/10"><Trash2 className="h-3 w-3" /></button>
               </div>
             </div>
           </div>
         ))}
-        {qrCodes.length === 0 && <div className="col-span-full py-10 text-center text-sm text-muted-foreground">No QR codes yet.</div>}
+        {qrCodes.length === 0 && <div className="col-span-full py-10 text-center text-sm text-muted-foreground">No payment methods yet. Add one above to get started.</div>}
       </div>
     </GlassCard>
   );
