@@ -259,12 +259,36 @@ function PaymentPage() {
               </div>
             </div>
 
-            {method === "qr" && matchedQr && (
-              <div className="mt-6 rounded-2xl border border-primary/30 bg-primary/5 p-4">
-                <div className="text-xs font-semibold">Scan to pay</div>
-                <p className="mt-1 text-[11px] text-muted-foreground">{matchedQr.label} · {matchedQr.currency}</p>
-                <img src={matchedQr.image_url} alt={matchedQr.label} className="mt-3 mx-auto h-44 w-44 rounded-lg bg-white p-2 object-contain" />
-                <p className="mt-3 text-center text-[11px] text-muted-foreground">After paying, click "Generate Invoice" to receive your receipt.</p>
+            {method === "qr" && qrCodes.length > 0 && (
+              <div className="mt-6 space-y-3">
+                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Choose a payment method</div>
+                {qrCodes
+                  .filter((q: any) => !planId || !q.plan_id || q.plan_id === planId)
+                  .map((q: any) => (
+                  <div key={q.id} className="rounded-2xl border border-primary/20 bg-primary/[0.04] p-4 transition-all hover:border-primary/40">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold">{q.label}</div>
+                        <div className="mt-0.5 text-[11px] text-muted-foreground">{q.currency}</div>
+                        {q.account_name && <div className="mt-2 text-[11px]"><span className="text-muted-foreground">Name: </span><span className="text-foreground/90">{q.account_name}</span></div>}
+                        {q.account_number && <div className="text-[11px] font-mono"><span className="text-muted-foreground font-sans">Account: </span>{q.account_number}</div>}
+                        {q.payment_link && (
+                          <a href={q.payment_link} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-[11px] text-primary hover:underline">
+                            <ArrowRight className="h-3 w-3" /> Open payment link
+                          </a>
+                        )}
+                      </div>
+                      <img src={q.image_url} alt={q.label} className="h-24 w-24 shrink-0 rounded-lg bg-white p-1.5 object-contain" />
+                    </div>
+                    {q.description && <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">{q.description}</p>}
+                  </div>
+                ))}
+                <p className="mt-2 text-center text-[11px] text-muted-foreground">After paying, click "Generate Invoice" to receive your receipt.</p>
+              </div>
+            )}
+            {method === "qr" && qrCodes.length === 0 && (
+              <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.02] p-4 text-center text-xs text-muted-foreground">
+                No QR payment methods are configured yet. Please choose Wise or Card.
               </div>
             )}
 
