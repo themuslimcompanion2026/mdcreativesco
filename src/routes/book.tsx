@@ -29,7 +29,8 @@ function BookPage() {
   const [submitted, setSubmitted] = useState(false);
 
   const wa = settings?.whatsapp_number?.replace(/[^0-9]/g, "");
-  const tg = settings?.telegram_url;
+  const rawTg = settings?.telegram_url?.trim();
+  const tg = rawTg ? (/^https?:\/\//i.test(rawTg) ? rawTg : `https://t.me/${rawTg.replace(/^@/, "")}`) : "";
   const cal = settings?.calendly_url;
 
   const budgetOptions = ["Under $2k", "$2k–$5k", "$5k–$10k", "$10k+"];
