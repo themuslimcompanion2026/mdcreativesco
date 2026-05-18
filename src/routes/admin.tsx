@@ -413,7 +413,7 @@ function PricingTab() {
           <Field label="Heading"><input value={heading} onChange={(e) => setHeading(e.target.value)} className={input()} /></Field>
           <Field label="Subheading"><input value={subheading} onChange={(e) => setSubheading(e.target.value)} className={input()} /></Field>
         </div>
-        <div className="mt-5"><SaveBtn onClick={saveSettings} /></div>
+        <div className="mt-5"><SaveBtn onClick={saveSettings} label={savingSettings ? "Saving…" : "Save Changes"} /></div>
       </GlassCard>
 
       <div className="flex items-center justify-between">
