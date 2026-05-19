@@ -1,0 +1,38 @@
+#:schema node_modules/wrangler/config-schema.json
+# Cloudflare Workers config for TanStack Start (SSR + server functions + API routes).
+# The @cloudflare/vite-plugin emits a Worker bundle from `vite build`.
+#
+# Deployment options:
+#   1) Cloudflare Workers (recommended for this stack) — `wrangler deploy`
+#   2) Cloudflare Pages with Workers integration — connect the GitHub repo,
+#      set Build command = `npm run build`, Output dir = `dist/client`.
+#      Pages auto-detects this wrangler config for the Worker side.
+#
+# See CLOUDFLARE_DEPLOY.md for the full walkthrough.
+
+name = "mdcreatives"
+main = "src/server.ts"
+compatibility_date = "2025-09-24"
+compatibility_flags = ["nodejs_compat"]
+
+# Static assets served from the SSR build output.
+[assets]
+directory = "./dist/client"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+
+[observability]
+enabled = true
+
+# ---- Runtime secrets ----
+# Do NOT put secrets in this file. Configure them with:
+#   wrangler secret put SUPABASE_SERVICE_ROLE_KEY
+#   wrangler secret put WISE_API_TOKEN
+#   wrangler secret put WISE_PROFILE_ID
+#   wrangler secret put WISE_WEBHOOK_PUBLIC_KEY
+#   wrangler secret put LOVABLE_API_KEY   # only if AI features are used
+#
+# Public (non-secret) values can live under [vars]:
+# [vars]
+# SUPABASE_URL = "https://YOUR-PROJECT-REF.supabase.co"
+# SUPABASE_PUBLISHABLE_KEY = "your-anon-key"
