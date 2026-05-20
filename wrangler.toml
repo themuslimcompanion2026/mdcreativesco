@@ -1,38 +1,37 @@
 #:schema node_modules/wrangler/config-schema.json
-# Cloudflare Workers config for TanStack Start (SSR + server functions + API routes).
-# The @cloudflare/vite-plugin emits a Worker bundle from `vite build`.
+# Cloudflare Pages config for the TanStack Start SSR app.
 #
-# Deployment options:
-#   1) Cloudflare Workers (recommended for this stack) — `wrangler deploy`
-#   2) Cloudflare Pages with Workers integration — connect the GitHub repo,
-#      set Build command = `npm run build`, Output dir = `dist/client`.
-#      Pages auto-detects this wrangler config for the Worker side.
+# Build pipeline (`npm run build`):
+#   1. `vite build` — emits `dist/client/` (static assets) and `dist/server/index.js`
+#      (the SSR Worker bundle) via @cloudflare/vite-plugin.
+#   2. `node scripts/build-pages.mjs` — assembles `dist/pages/`:
+#        dist/pages/
+#          <static assets>          (copied from dist/client/)
+#          _worker.js/index.js      (SSR worker, directory form so imports work)
+#          _worker.js/assets/*.js   (worker code-split chunks)
+#          _routes.json             (tells Pages which paths hit the worker)
 #
-# See CLOUDFLARE_DEPLOY.md for the full walkthrough.
+# `pages_build_output_dir` makes Pages auto-detect this directory and attach
+# the `_worker.js/` SSR runtime. Without it, Pages serves static-only and
+# every SSR route returns 404.
+#
+# For direct Workers deploy (alternative to Pages), use the wrangler config
+# emitted by the Vite plugin:  `wrangler deploy -c dist/server/wrangler.json`.
+# See CLOUDFLARE_DEPLOY.md.
 
 name = "mdcreatives"
-main = "src/server.ts"
 compatibility_date = "2025-09-24"
 compatibility_flags = ["nodejs_compat"]
-
-# Static assets served from the SSR build output.
-[assets]
-directory = "./dist/client"
-binding = "ASSETS"
-not_found_handling = "single-page-application"
+pages_build_output_dir = "./dist/pages"
 
 [observability]
 enabled = true
 
 # ---- Runtime secrets ----
-# Do NOT put secrets in this file. Configure them with:
-#   wrangler secret put SUPABASE_SERVICE_ROLE_KEY
-#   wrangler secret put WISE_API_TOKEN
-#   wrangler secret put WISE_PROFILE_ID
-#   wrangler secret put WISE_WEBHOOK_PUBLIC_KEY
-#   wrangler secret put LOVABLE_API_KEY   # only if AI features are used
-#
-# Public (non-secret) values can live under [vars]:
-# [vars]
-# SUPABASE_URL = "https://YOUR-PROJECT-REF.supabase.co"
-# SUPABASE_PUBLISHABLE_KEY = "your-anon-key"
+# Configure in Cloudflare dashboard → Pages project → Settings → Variables and Secrets.
+# Required:
+#   SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, SUPABASE_SERVICE_ROLE_KEY
+#   WISE_API_TOKEN, WISE_PROFILE_ID, WISE_WEBHOOK_PUBLIC_KEY
+#   LOVABLE_API_KEY (only if AI features are used)
+# Plus build-time VITE_* vars (inlined into the client bundle by `vite build`):
+#   VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY, VITE_SUPABASE_PROJECT_ID
