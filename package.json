@@ -5,12 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev",
-    "build": "vite build",
-    "build:dev": "vite build --mode development",
+    "build": "vite build && node scripts/build-pages.mjs",
+    "build:dev": "vite build --mode development && node scripts/build-pages.mjs",
     "preview": "vite preview",
-    "deploy": "vite build && wrangler deploy",
-    "cf:dev": "wrangler dev",
+    "deploy": "npm run build && wrangler deploy -c dist/server/wrangler.json",
+    "deploy:pages": "npm run build && wrangler pages deploy dist/pages",
+    "cf:dev": "wrangler dev -c dist/server/wrangler.json",
     "cf:tail": "wrangler tail",
+    "smoke-test": "node scripts/smoke-test.mjs",
     "lint": "eslint .",
     "format": "prettier --write ."
   },

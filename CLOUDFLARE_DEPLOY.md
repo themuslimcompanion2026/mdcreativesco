@@ -1,6 +1,10 @@
 # Cloudflare Deployment Guide — MD Creatives
 
-This project is a **TanStack Start + Vite** app that builds to a **Cloudflare Worker** (SSR + server functions + API routes) with static assets served from the same Worker. It can be deployed to either **Cloudflare Workers** (recommended) or **Cloudflare Pages** with the Workers integration.
+This project is a **TanStack Start + Vite** app. `vite build` (via `@cloudflare/vite-plugin`) produces an SSR Worker plus static client assets, and a postbuild step assembles a **Cloudflare Pages**-compatible directory at `dist/pages/`.
+
+You can deploy to either:
+- **Cloudflare Pages** (recommended for Git-based deploys) — uses `dist/pages/` with `_worker.js/` advanced mode.
+- **Cloudflare Workers** (direct deploy) — uses `dist/server/index.js` with `dist/client/` as static assets.
 
 ---
 
@@ -9,77 +13,94 @@ This project is a **TanStack Start + Vite** app that builds to a **Cloudflare Wo
 | Item | Value |
 |------|-------|
 | Build command | `npm run build` |
-| Static assets (Pages "output dir") | `dist/client` |
-| Worker entry | `src/server.ts` (configured in `wrangler.toml` via `main`) |
-| Node compat | `nodejs_compat` (enabled in `wrangler.toml`) |
+| Pages output dir | `dist/pages` |
+| Workers entry | `dist/server/index.js` |
+| Workers assets dir | `dist/client` |
+| Node compat | `nodejs_compat` |
 | Compatibility date | `2025-09-24` |
 
-The `@cloudflare/vite-plugin` produces a Worker bundle plus the `dist/client` asset directory during `vite build`.
+`npm run build` runs:
+1. `vite build` → emits `dist/client/` (static assets) and `dist/server/index.js` (Worker bundle).
+2. `node scripts/build-pages.mjs` → assembles `dist/pages/`:
+
+```
+dist/pages/
+├── _routes.json            # tells Pages which paths hit the SSR worker
+├── _worker.js/             # SSR worker (directory form — keeps imports intact)
+│   ├── index.js
+│   └── assets/*.js
+├── assets/                 # client JS/CSS chunks (served as static)
+└── favicon.ico, ...
+```
+
+`_routes.json` excludes `/assets/*`, `/favicon.ico`, `/robots.txt`, `/sitemap.xml` from the worker so Pages serves them as static. Everything else (including `/api/*` and every SSR page) goes through `_worker.js/`.
 
 ---
 
 ## 2. Required Environment Variables
 
-Copy `.env.example` to `.env` for local dev. For production, set them in the Cloudflare dashboard or via `wrangler secret put`.
+Set in Cloudflare dashboard → your Pages/Workers project → **Settings → Variables and Secrets**. See `.env.example` for the full list.
 
-**Public (safe in browser, configured as `[vars]` or Pages env vars):**
+**Build-time (must be present when `vite build` runs in Cloudflare's build env):**
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_PUBLISHABLE_KEY`
 - `VITE_SUPABASE_PROJECT_ID`
-- `SUPABASE_URL` (server mirror)
-- `SUPABASE_PUBLISHABLE_KEY` (server mirror)
 
-**Secret (use `wrangler secret put` or Pages "Encrypt" toggle):**
+**Runtime (server functions / SSR — set as "Secret" / Encrypt):**
+- `SUPABASE_URL`
+- `SUPABASE_PUBLISHABLE_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `WISE_API_TOKEN`
 - `WISE_PROFILE_ID`
 - `WISE_WEBHOOK_PUBLIC_KEY`
 - `LOVABLE_API_KEY` *(only if AI features are used)*
 
-> `VITE_*` values are inlined into the client bundle at build time — they must be present when `vite build` runs (in CI / Pages build env), not just at runtime.
+---
+
+## 3. Deploy via Cloudflare Pages (recommended)
+
+### One-click via Git
+1. Push the repo to GitHub.
+2. Cloudflare dashboard → **Workers & Pages → Create → Pages → Connect to Git**.
+3. Configure:
+   - **Framework preset:** None
+   - **Build command:** `npm run build`
+   - **Build output directory:** `dist/pages`
+   - **Root directory:** `/`
+4. Add every env var from §2 (mark secrets as **Encrypt**).
+5. Save and deploy. Pages auto-detects `_worker.js/` and attaches the SSR runtime.
+
+### CLI deploy
+```bash
+npm install
+npx wrangler login
+npm run deploy:pages   # vite build + build-pages + wrangler pages deploy dist/pages
+```
 
 ---
 
-## 3. Deploy via Cloudflare Workers (recommended)
+## 4. Deploy via Cloudflare Workers (alternative)
 
 ```bash
-# one-time
 npm install
 npx wrangler login
 
-# set secrets (repeat for each secret listed above)
+# Secrets (run once per secret)
 npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
 npx wrangler secret put WISE_API_TOKEN
 npx wrangler secret put WISE_PROFILE_ID
 npx wrangler secret put WISE_WEBHOOK_PUBLIC_KEY
 
-# build + deploy
-npm run deploy
+npm run deploy   # vite build + build-pages + wrangler deploy -c dist/server/wrangler.json
 ```
 
-`npm run deploy` runs `vite build && wrangler deploy`. Wrangler reads `wrangler.toml`, uploads the Worker (`src/server.ts`), and binds `dist/client` as static assets.
-
----
-
-## 4. Deploy via Cloudflare Pages (GitHub integration)
-
-1. Push the repo to GitHub.
-2. In Cloudflare dashboard → **Workers & Pages → Create → Pages → Connect to Git**.
-3. Select the repo and configure:
-   - **Framework preset:** None
-   - **Build command:** `npm run build`
-   - **Build output directory:** `dist/client`
-   - **Root directory:** `/`
-4. Under **Environment variables**, add every variable from `.env.example`. Use **Encrypt** for secrets.
-5. Save and deploy. Pages detects `wrangler.toml` and deploys the SSR Worker alongside the static assets.
+The Workers config (`dist/server/wrangler.json`) is **emitted by the Vite plugin** during build — it correctly references the built `index.js` and binds `dist/client/` as static assets. Do not hand-edit it.
 
 ---
 
 ## 5. Custom Domain
 
-1. In Cloudflare dashboard → your Worker / Pages project → **Custom domains → Add**.
-2. Enter your domain (e.g. `mdcreatives.co`). Cloudflare provisions the TLS cert automatically.
-3. If the domain's DNS is on Cloudflare, the route is wired automatically. Otherwise, add the `CNAME` Cloudflare displays.
+Cloudflare dashboard → Pages/Workers project → **Custom domains → Add**. Cloudflare provisions TLS automatically. If DNS is on Cloudflare, routing is wired automatically.
 
 ---
 
@@ -91,10 +112,10 @@ cp .env.example .env   # fill in real values
 npm run dev            # Vite dev server (http://localhost:8080)
 ```
 
-To test the production Worker bundle locally:
+To emulate the production Cloudflare runtime locally:
 ```bash
 npm run build
-npm run cf:dev         # wrangler dev — emulates the Cloudflare runtime
+npm run cf:dev         # wrangler dev against the built worker
 ```
 
 Live logs from the deployed Worker:
@@ -104,35 +125,70 @@ npm run cf:tail
 
 ---
 
-## 7. Runtime Notes
+## 7. Smoke Test
 
-- All server logic uses **TanStack `createServerFn`** and file-based server routes under `src/routes/api/public/*`. No Supabase Edge Functions are required.
-- `src/server.ts` is the Worker entry — it wraps the TanStack SSR handler with a branded error page fallback.
-- `nodejs_compat` is required for `pdf-lib`, `crypto`, and Supabase client internals. Do **not** remove the flag.
-- Server functions read secrets from `process.env` **inside the `.handler()` body** — Cloudflare injects env at request time, not at module load.
-- Webhook endpoint: `POST /api/public/webhooks/wise` (RSA signature verified with `WISE_WEBHOOK_PUBLIC_KEY`).
-- Invoice PDF endpoint: `GET /api/public/invoices/:id/pdf`.
+After deploying, verify SSR + API routes:
 
----
+```bash
+BASE_URL=https://your-site.pages.dev npm run smoke-test
+# or
+node scripts/smoke-test.mjs https://your-site.pages.dev
+```
 
-## 8. Troubleshooting
-
-| Symptom | Fix |
-|---------|-----|
-| `Missing Supabase environment variable(s)` at runtime | Set the secret/var in the Cloudflare dashboard and redeploy. `VITE_*` vars must be present at **build time** too. |
-| `[unenv] X is not implemented yet!` | A dependency uses a Node API not supported on Workers (e.g. `child_process`). Replace the dependency. |
-| 404 on refresh for a deep link | Ensure the route file exists under `src/routes/` and `not_found_handling = "single-page-application"` is set in `wrangler.toml` (it is). |
-| `Unauthorized` from a server function | Check that `src/start.ts` registers `attachSupabaseAuth` in `functionMiddleware` and the user is signed in. |
-| Wise webhook returns 401 | Verify `WISE_WEBHOOK_PUBLIC_KEY` matches Wise's signing key for your environment (sandbox vs production). |
-| Build fails with `Cannot find module 'wrangler'` | Run `npm install` — `wrangler` is a devDependency. |
+Checks every critical SSR route (`/`, `/admin`, `/about`, `/services`, `/portfolio`, `/pricing`, `/contact`, `/book`, `/payment`, `/reset-password`, `/invoice/test-id`) and the API endpoints (`/api/public/invoices/:id/pdf`, `/api/public/webhooks/wise`). Exits non-zero on failure.
 
 ---
 
-## 9. Files Involved
+## 8. Runtime Notes
 
-- `wrangler.toml` — Worker config (entry, compat, static assets binding)
-- `vite.config.ts` — re-exports `@lovable.dev/vite-tanstack-config` and points the SSR entry at `src/server.ts`
-- `src/server.ts` — Worker `fetch` handler wrapping TanStack SSR
+- Server logic lives in **TanStack `createServerFn`** and server routes under `src/routes/api/public/*`. No Supabase Edge Functions are used.
+- `src/server.ts` is the Worker entry — wraps the TanStack SSR handler with a branded error fallback.
+- `nodejs_compat` is required for `pdf-lib`, `crypto`, and Supabase internals.
+- Server functions read secrets from `process.env` **inside `.handler()` bodies** — Cloudflare injects env at request time.
+- Webhook: `POST /api/public/webhooks/wise` (RSA-signature verified).
+- Invoice PDF: `GET /api/public/invoices/:id/pdf`.
+
+---
+
+## 9. Troubleshooting
+
+### Critical routes that must SSR (no 404 on refresh / deep link)
+`/`, `/admin`, `/about`, `/services`, `/portfolio`, `/pricing`, `/contact`, `/book`, `/payment`, `/invoice/:id`, `/reset-password`
+
+### API endpoints that must be reachable
+- `POST /api/public/webhooks/wise`
+- `GET  /api/public/invoices/:id/pdf`
+
+### How to verify the SSR worker is attached on Pages
+1. Open the deployed site → DevTools → Network → request `/admin`.
+2. Response should be `200` with `content-type: text/html` and the HTML body should contain rendered React markup (search for `id="root"` with content inside).
+3. If you see a Cloudflare 404 page or the static SPA shell for every URL, the worker is **not** attached.
+4. In the Cloudflare dashboard → your project → **Functions** tab should show invocations after hitting any SSR route. Zero invocations = worker not picked up.
+
+### Common Cloudflare Pages SSR issues
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| Cloudflare 404 on every route | Pages didn't detect `_worker.js/` — output dir misconfigured | Set **Build output directory** to `dist/pages` (not `dist` or `dist/client`). |
+| Build log: *"Wrangler configuration file was found but it does not appear to be valid"* | Root `wrangler.toml` was in Workers format (`main` + `[assets]`) while Pages expects `pages_build_output_dir`. | Fixed — `wrangler.toml` now uses `pages_build_output_dir = "./dist/pages"`. Redeploy. |
+| `Missing Supabase environment variable(s)` at runtime | Secrets not set in Pages project | Add all vars from §2 in Pages → Settings → Variables and Secrets, then redeploy. |
+| `VITE_SUPABASE_URL is undefined` in browser | `VITE_*` vars missing at **build** time | Add them to the Pages env (Production + Preview) and trigger a new deployment. |
+| `[unenv] X is not implemented yet!` | A dependency uses an unsupported Node API | Replace the dependency — Cloudflare's Node compat is partial. |
+| 404 on `/admin` refresh but `/` works | `_routes.json` is excluding too many paths, or `_worker.js/` is missing | Re-run `npm run build`; verify `dist/pages/_worker.js/index.js` exists and `_routes.json` `include: ["/*"]`. |
+| Wise webhook returns 401 | `WISE_WEBHOOK_PUBLIC_KEY` mismatch (sandbox vs production) | Re-copy the key from Wise's dashboard for the correct environment. |
+| `Unauthorized` from a server function | `src/start.ts` missing `attachSupabaseAuth` in `functionMiddleware`, or user not signed in | Confirm middleware is registered; sign in via `/admin`. |
+| Build fails with `Cannot find module 'wrangler'` | Missing devDependency | `npm install` (wrangler is in devDependencies). |
+
+---
+
+## 10. Files Involved
+
+- `wrangler.toml` — Pages config (`pages_build_output_dir = "./dist/pages"`)
+- `scripts/build-pages.mjs` — postbuild that assembles `dist/pages/` from `dist/client/` + `dist/server/`
+- `scripts/smoke-test.mjs` — deployed-site smoke test
+- `vite.config.ts` — re-exports `@lovable.dev/vite-tanstack-config`; sets SSR entry to `src/server.ts`
+- `src/server.ts` — Worker `fetch` handler wrapping TanStack SSR with a branded error page
 - `src/start.ts` — TanStack Start instance + global middleware
+- `dist/server/wrangler.json` — auto-generated Workers config (used by `npm run deploy`)
 - `.env.example` — full list of required env vars
-- `package.json` — `deploy`, `cf:dev`, `cf:tail` scripts
+- `package.json` — `build`, `deploy`, `deploy:pages`, `cf:dev`, `cf:tail`, `smoke-test`
