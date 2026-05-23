@@ -21,7 +21,7 @@ You can deploy to either:
 
 `npm run build` runs:
 1. `vite build` → emits `dist/client/` (static assets) and `dist/server/index.js` (Worker bundle).
-2. `node scripts/build-pages.mjs` → assembles `dist/pages/`:
+2. `node scripts/build-pages.mjs` → removes generated Pages-breaking `wrangler.json` files and assembles `dist/pages/`:
 
 ```
 dist/pages/
@@ -32,6 +32,8 @@ dist/pages/
 ├── assets/                 # client JS/CSS chunks (served as static)
 └── favicon.ico, ...
 ```
+
+The final Pages output intentionally **must not** contain any `wrangler.json`. The postbuild removes `dist/client/wrangler.json`, strips copied worker configs, and fails the build if any `wrangler.json` remains anywhere inside `dist/pages/`.
 
 `_routes.json` excludes `/assets/*`, `/favicon.ico`, `/robots.txt`, `/sitemap.xml` from the worker so Pages serves them as static. Everything else (including `/api/*` and every SSR page) goes through `_worker.js/`.
 
@@ -170,7 +172,8 @@ Checks every critical SSR route (`/`, `/admin`, `/about`, `/services`, `/portfol
 | Symptom | Cause | Fix |
 |---------|-------|-----|
 | Cloudflare 404 on every route | Pages didn't detect `_worker.js/` — output dir misconfigured | Set **Build output directory** to `dist/pages` (not `dist` or `dist/client`). |
-| Build log: *"Wrangler configuration file was found but it does not appear to be valid"* | Root `wrangler.toml` was in Workers format (`main` + `[assets]`) while Pages expects `pages_build_output_dir`. | Fixed — `wrangler.toml` now uses `pages_build_output_dir = "./dist/pages"`. Redeploy. |
+| Build log: *"Wrangler configuration file was found but it does not appear to be valid"* | Pages discovered a generated `wrangler.json` in the build output instead of using the root config. | Fixed — `scripts/build-pages.mjs` now removes generated `dist/client/wrangler.json`, strips copied worker configs, and fails if any `wrangler.json` remains in `dist/pages`. Redeploy. |
+| Build log: *"Expected \"triggers\" to be of type object"* | Cloudflare tried to validate the Vite-generated `wrangler.json` emitted into the client output. | Ensure the deployment uses `npm run build` and `dist/pages`; the postbuild now removes that file automatically before Pages upload. |
 | `Missing Supabase environment variable(s)` at runtime | Secrets not set in Pages project | Add all vars from §2 in Pages → Settings → Variables and Secrets, then redeploy. |
 | `VITE_SUPABASE_URL is undefined` in browser | `VITE_*` vars missing at **build** time | Add them to the Pages env (Production + Preview) and trigger a new deployment. |
 | `[unenv] X is not implemented yet!` | A dependency uses an unsupported Node API | Replace the dependency — Cloudflare's Node compat is partial. |
@@ -185,6 +188,7 @@ Checks every critical SSR route (`/`, `/admin`, `/about`, `/services`, `/portfol
 
 - `wrangler.toml` — Pages config (`pages_build_output_dir = "./dist/pages"`)
 - `scripts/build-pages.mjs` — postbuild that assembles `dist/pages/` from `dist/client/` + `dist/server/`
+- `dist/pages/` — final Pages artifact; should contain `_worker.js/`, `_routes.json`, static assets, and **no** `wrangler.json`
 - `scripts/smoke-test.mjs` — deployed-site smoke test
 - `vite.config.ts` — re-exports `@lovable.dev/vite-tanstack-config`; sets SSR entry to `src/server.ts`
 - `src/server.ts` — Worker `fetch` handler wrapping TanStack SSR with a branded error page
