@@ -181,7 +181,7 @@ export const getPublicInvoice = createServerFn({ method: "POST" })
     const { data: inv, error } = await supabaseAdmin
       .from("invoices")
       .select(
-        "id, invoice_number, plan_id, plan_name, client_name, client_company, client_website, usd_amount, client_currency, fx_rate, converted_amount, issue_date, due_date, status, payment_method, wise_quote_id, verification_status, verification_reference, verification_proof_url, verification_submitted_at, paid_at, created_at, notes"
+        "id, invoice_number, plan_id, plan_name, client_name, client_email, client_company, client_website, usd_amount, client_currency, fx_rate, fx_source, converted_amount, issue_date, due_date, status, payment_method, wise_quote_id, wise_reference, verification_status, verification_reference, verification_proof_url, verification_submitted_at, paid_at, created_at, notes"
       )
       .eq("id", data.id)
       .maybeSingle();
