@@ -172,6 +172,25 @@ export const previewFxRate = createServerFn({ method: "POST" })
     return { rate, source, converted: Math.round(data.amount * rate * 100) / 100 };
   });
 
+/* -------- Public invoice lookup by ID (token-style access) --------
+   Returns a sanitized view of the invoice so customers with the link can
+   view/pay it without exposing the full table to anon enumeration. */
+export const getPublicInvoice = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ data }) => {
+    const { data: inv, error } = await supabaseAdmin
+      .from("invoices")
+      .select(
+        "id, invoice_number, plan_id, plan_name, client_name, client_company, client_website, usd_amount, client_currency, fx_rate, converted_amount, issue_date, due_date, status, payment_method, wise_quote_id, verification_status, verification_reference, verification_proof_url, verification_submitted_at, paid_at, created_at, notes"
+      )
+      .eq("id", data.id)
+      .maybeSingle();
+    if (error) throw new Response(error.message, { status: 500 });
+    return inv;
+  });
+
+
+
 /* -------- Public (customer-initiated) invoice creation -------- */
 const PublicInvoiceInput = z.object({
   plan_id: z.string().uuid().nullable().optional(),
