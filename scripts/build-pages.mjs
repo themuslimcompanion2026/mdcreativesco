@@ -11,12 +11,35 @@
 
 import { cp, mkdir, rm, writeFile, readdir, stat } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { join, relative, resolve } from "node:path";
 
 const root = resolve(process.cwd());
 const clientDir = join(root, "dist/client");
 const serverDir = join(root, "dist/server");
 const outDir = join(root, "dist/pages");
+
+async function removeIfExists(targetPath, label) {
+  if (!existsSync(targetPath)) return false;
+  await rm(targetPath, { recursive: true, force: true });
+  console.log(`[build-pages] Removed ${label}: ${relative(root, targetPath)}`);
+  return true;
+}
+
+async function collectNamedFiles(dir, fileName, matches = []) {
+  if (!existsSync(dir)) return matches;
+  const entries = await readdir(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    const entryPath = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      await collectNamedFiles(entryPath, fileName, matches);
+      continue;
+    }
+    if (entry.isFile() && entry.name === fileName) {
+      matches.push(entryPath);
+    }
+  }
+  return matches;
+}
 
 if (!existsSync(clientDir) || !existsSync(serverDir)) {
   console.error("[build-pages] Missing dist/client or dist/server. Run `vite build` first.");
@@ -26,6 +49,10 @@ if (!existsSync(clientDir) || !existsSync(serverDir)) {
 await rm(outDir, { recursive: true, force: true });
 await mkdir(outDir, { recursive: true });
 
+// Cloudflare Pages must only see the root wrangler.toml. Remove generated
+// wrangler.json files from the client build before assembling the Pages output.
+await removeIfExists(join(clientDir, "wrangler.json"), "generated client wrangler.json");
+
 // 1. Copy static client assets to the Pages root
 await cp(clientDir, outDir, { recursive: true });
 
@@ -33,8 +60,9 @@ await cp(clientDir, outDir, { recursive: true });
 const workerDir = join(outDir, "_worker.js");
 await cp(serverDir, workerDir, { recursive: true });
 
-// Pages doesn't need the generated wrangler.json inside _worker.js
-await rm(join(workerDir, "wrangler.json"), { force: true });
+// Pages must not contain any wrangler.json in the final deployable output.
+await removeIfExists(join(outDir, "wrangler.json"), "root-level Pages wrangler.json");
+await removeIfExists(join(workerDir, "wrangler.json"), "copied worker wrangler.json");
 
 // 3. Generate _routes.json so static asset paths bypass the worker.
 // Everything else (including SSR routes and /api/*) goes through the worker.
@@ -54,7 +82,33 @@ const routes = {
   include: ["/*"],
   exclude: Array.from(staticExcludes).sort(),
 };
-await writeFile(join(outDir, "_routes.json"), JSON.stringify(routes, null, 2));
+const routesPath = join(outDir, "_routes.json");
+await writeFile(routesPath, JSON.stringify(routes, null, 2));
+
+const strayWranglerFiles = await collectNamedFiles(outDir, "wrangler.json");
+if (strayWranglerFiles.length > 0) {
+  throw new Error(
+    `[build-pages] Final Pages output still contains wrangler.json: ${strayWranglerFiles
+      .map((file) => relative(root, file))
+      .join(", ")}`,
+  );
+}
+
+const workerEntryPath = join(workerDir, "index.js");
+const hasWorkerDir = existsSync(workerDir);
+const hasWorkerEntry = existsSync(workerEntryPath);
+const hasRoutesFile = existsSync(routesPath);
+
+if (!hasWorkerDir || !hasWorkerEntry) {
+  throw new Error("[build-pages] Missing dist/pages/_worker.js/index.js after assembly.");
+}
+
+if (!hasRoutesFile) {
+  throw new Error("[build-pages] Missing dist/pages/_routes.json after assembly.");
+}
 
 console.log(`[build-pages] Wrote ${outDir}`);
 console.log(`[build-pages] _routes.json excludes:`, routes.exclude);
+console.log(`[build-pages] Verify _worker.js exists: ${hasWorkerDir && hasWorkerEntry ? "yes" : "no"}`);
+console.log(`[build-pages] Verify _routes.json exists: ${hasRoutesFile ? "yes" : "no"}`);
+console.log("[build-pages] Verify no wrangler.json exists in final output: yes");
