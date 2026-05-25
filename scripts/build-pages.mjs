@@ -9,7 +9,7 @@
 //     _routes.json       <- tell Pages which paths go to the worker vs static
 //     <client assets>    <- everything from dist/client/
 
-import { cp, mkdir, rm, writeFile, readdir, stat } from "node:fs/promises";
+import { cp, mkdir, rename, rm, writeFile, readdir, stat } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 
@@ -41,6 +41,39 @@ async function collectNamedFiles(dir, fileName, matches = []) {
   return matches;
 }
 
+async function normalizeWorkerEntry(workerDir) {
+  const preferredEntries = ["index.js", "server.js", "worker.js"];
+  const existingPreferredEntry = preferredEntries.find((fileName) => existsSync(join(workerDir, fileName)));
+
+  if (!existingPreferredEntry) {
+    const topLevelJsFiles = (await readdir(workerDir, { withFileTypes: true }))
+      .filter((entry) => entry.isFile() && entry.name.endsWith('.js'))
+      .map((entry) => entry.name)
+      .sort();
+
+    if (topLevelJsFiles.length !== 1) {
+      throw new Error(
+        `[build-pages] Could not determine worker entry in ${relative(root, workerDir)}. Found: ${topLevelJsFiles.join(', ') || 'none'}`,
+      );
+    }
+
+    const fallbackEntry = topLevelJsFiles[0];
+    if (fallbackEntry !== 'index.js') {
+      await rename(join(workerDir, fallbackEntry), join(workerDir, 'index.js'));
+      return 'index.js';
+    }
+
+    return fallbackEntry;
+  }
+
+  if (existingPreferredEntry !== 'index.js') {
+    await rename(join(workerDir, existingPreferredEntry), join(workerDir, 'index.js'));
+    return 'index.js';
+  }
+
+  return existingPreferredEntry;
+}
+
 if (!existsSync(clientDir) || !existsSync(serverDir)) {
   console.error("[build-pages] Missing dist/client or dist/server. Run `vite build` first.");
   process.exit(1);
@@ -59,6 +92,7 @@ await cp(clientDir, outDir, { recursive: true });
 // 2. Copy the SSR worker bundle into _worker.js/ (directory form)
 const workerDir = join(outDir, "_worker.js");
 await cp(serverDir, workerDir, { recursive: true });
+const normalizedWorkerEntry = await normalizeWorkerEntry(workerDir);
 
 // Pages must not contain any wrangler.json in the final deployable output.
 await removeIfExists(join(outDir, "wrangler.json"), "root-level Pages wrangler.json");
@@ -108,6 +142,7 @@ if (!hasRoutesFile) {
 }
 
 console.log(`[build-pages] Wrote ${outDir}`);
+console.log(`[build-pages] Worker entry normalized to: ${normalizedWorkerEntry}`);
 console.log(`[build-pages] _routes.json excludes:`, routes.exclude);
 console.log(`[build-pages] Verify _worker.js exists: ${hasWorkerDir && hasWorkerEntry ? "yes" : "no"}`);
 console.log(`[build-pages] Verify _routes.json exists: ${hasRoutesFile ? "yes" : "no"}`);
