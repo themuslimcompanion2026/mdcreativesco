@@ -1,0 +1,36 @@
+name: Deployment Validation
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "Base URL to smoke-test (defaults to BASE_URL secret)"
+        required: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bun run build
+      - run: node scripts/validate-pages-build.mjs
+
+  smoke:
+    needs: build
+    if: ${{ github.event_name == 'workflow_dispatch' || vars.SMOKE_BASE_URL != '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Smoke-test deployed site
+        env:
+          BASE_URL: ${{ github.event.inputs.base_url || vars.SMOKE_BASE_URL }}
+        run: node scripts/smoke-test.mjs "$BASE_URL"
