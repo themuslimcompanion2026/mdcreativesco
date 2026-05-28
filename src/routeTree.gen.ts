@@ -16,10 +16,12 @@ import { Route as PortfolioRouteImport } from './routes/portfolio'
 import { Route as PaymentRouteImport } from './routes/payment'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as BookRouteImport } from './routes/book'
+import { Route as AdminDiagnosticsRouteImport } from './routes/admin-diagnostics'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as InvoiceIdRouteImport } from './routes/invoice.$id'
+import { Route as ApiHealthRouteImport } from './routes/api/health'
 import { Route as ApiPublicWebhooksWiseRouteImport } from './routes/api/public/webhooks/wise'
 import { Route as ApiPublicInvoicesIdPdfRouteImport } from './routes/api/public/invoices.$id.pdf'
 
@@ -58,6 +60,11 @@ const BookRoute = BookRouteImport.update({
   path: '/book',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminDiagnosticsRoute = AdminDiagnosticsRouteImport.update({
+  id: '/admin-diagnostics',
+  path: '/admin-diagnostics',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminRoute = AdminRouteImport.update({
   id: '/admin',
   path: '/admin',
@@ -78,6 +85,11 @@ const InvoiceIdRoute = InvoiceIdRouteImport.update({
   path: '/invoice/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiHealthRoute = ApiHealthRouteImport.update({
+  id: '/api/health',
+  path: '/api/health',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicWebhooksWiseRoute = ApiPublicWebhooksWiseRouteImport.update({
   id: '/api/public/webhooks/wise',
   path: '/api/public/webhooks/wise',
@@ -93,6 +105,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/admin': typeof AdminRoute
+  '/admin-diagnostics': typeof AdminDiagnosticsRoute
   '/book': typeof BookRoute
   '/contact': typeof ContactRoute
   '/payment': typeof PaymentRoute
@@ -100,6 +113,7 @@ export interface FileRoutesByFullPath {
   '/pricing': typeof PricingRoute
   '/reset-password': typeof ResetPasswordRoute
   '/services': typeof ServicesRoute
+  '/api/health': typeof ApiHealthRoute
   '/invoice/$id': typeof InvoiceIdRoute
   '/api/public/webhooks/wise': typeof ApiPublicWebhooksWiseRoute
   '/api/public/invoices/$id/pdf': typeof ApiPublicInvoicesIdPdfRoute
@@ -108,6 +122,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/admin': typeof AdminRoute
+  '/admin-diagnostics': typeof AdminDiagnosticsRoute
   '/book': typeof BookRoute
   '/contact': typeof ContactRoute
   '/payment': typeof PaymentRoute
@@ -115,6 +130,7 @@ export interface FileRoutesByTo {
   '/pricing': typeof PricingRoute
   '/reset-password': typeof ResetPasswordRoute
   '/services': typeof ServicesRoute
+  '/api/health': typeof ApiHealthRoute
   '/invoice/$id': typeof InvoiceIdRoute
   '/api/public/webhooks/wise': typeof ApiPublicWebhooksWiseRoute
   '/api/public/invoices/$id/pdf': typeof ApiPublicInvoicesIdPdfRoute
@@ -124,6 +140,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/admin': typeof AdminRoute
+  '/admin-diagnostics': typeof AdminDiagnosticsRoute
   '/book': typeof BookRoute
   '/contact': typeof ContactRoute
   '/payment': typeof PaymentRoute
@@ -131,6 +148,7 @@ export interface FileRoutesById {
   '/pricing': typeof PricingRoute
   '/reset-password': typeof ResetPasswordRoute
   '/services': typeof ServicesRoute
+  '/api/health': typeof ApiHealthRoute
   '/invoice/$id': typeof InvoiceIdRoute
   '/api/public/webhooks/wise': typeof ApiPublicWebhooksWiseRoute
   '/api/public/invoices/$id/pdf': typeof ApiPublicInvoicesIdPdfRoute
@@ -141,6 +159,7 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/admin'
+    | '/admin-diagnostics'
     | '/book'
     | '/contact'
     | '/payment'
@@ -148,6 +167,7 @@ export interface FileRouteTypes {
     | '/pricing'
     | '/reset-password'
     | '/services'
+    | '/api/health'
     | '/invoice/$id'
     | '/api/public/webhooks/wise'
     | '/api/public/invoices/$id/pdf'
@@ -156,6 +176,7 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/admin'
+    | '/admin-diagnostics'
     | '/book'
     | '/contact'
     | '/payment'
@@ -163,6 +184,7 @@ export interface FileRouteTypes {
     | '/pricing'
     | '/reset-password'
     | '/services'
+    | '/api/health'
     | '/invoice/$id'
     | '/api/public/webhooks/wise'
     | '/api/public/invoices/$id/pdf'
@@ -171,6 +193,7 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/admin'
+    | '/admin-diagnostics'
     | '/book'
     | '/contact'
     | '/payment'
@@ -178,6 +201,7 @@ export interface FileRouteTypes {
     | '/pricing'
     | '/reset-password'
     | '/services'
+    | '/api/health'
     | '/invoice/$id'
     | '/api/public/webhooks/wise'
     | '/api/public/invoices/$id/pdf'
@@ -187,6 +211,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AboutRoute: typeof AboutRoute
   AdminRoute: typeof AdminRoute
+  AdminDiagnosticsRoute: typeof AdminDiagnosticsRoute
   BookRoute: typeof BookRoute
   ContactRoute: typeof ContactRoute
   PaymentRoute: typeof PaymentRoute
@@ -194,6 +219,7 @@ export interface RootRouteChildren {
   PricingRoute: typeof PricingRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   ServicesRoute: typeof ServicesRoute
+  ApiHealthRoute: typeof ApiHealthRoute
   InvoiceIdRoute: typeof InvoiceIdRoute
   ApiPublicWebhooksWiseRoute: typeof ApiPublicWebhooksWiseRoute
   ApiPublicInvoicesIdPdfRoute: typeof ApiPublicInvoicesIdPdfRoute
@@ -250,6 +276,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BookRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin-diagnostics': {
+      id: '/admin-diagnostics'
+      path: '/admin-diagnostics'
+      fullPath: '/admin-diagnostics'
+      preLoaderRoute: typeof AdminDiagnosticsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin': {
       id: '/admin'
       path: '/admin'
@@ -278,6 +311,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof InvoiceIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/health': {
+      id: '/api/health'
+      path: '/api/health'
+      fullPath: '/api/health'
+      preLoaderRoute: typeof ApiHealthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/webhooks/wise': {
       id: '/api/public/webhooks/wise'
       path: '/api/public/webhooks/wise'
@@ -299,6 +339,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutRoute: AboutRoute,
   AdminRoute: AdminRoute,
+  AdminDiagnosticsRoute: AdminDiagnosticsRoute,
   BookRoute: BookRoute,
   ContactRoute: ContactRoute,
   PaymentRoute: PaymentRoute,
@@ -306,6 +347,7 @@ const rootRouteChildren: RootRouteChildren = {
   PricingRoute: PricingRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   ServicesRoute: ServicesRoute,
+  ApiHealthRoute: ApiHealthRoute,
   InvoiceIdRoute: InvoiceIdRoute,
   ApiPublicWebhooksWiseRoute: ApiPublicWebhooksWiseRoute,
   ApiPublicInvoicesIdPdfRoute: ApiPublicInvoicesIdPdfRoute,

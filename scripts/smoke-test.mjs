@@ -23,6 +23,7 @@ const ssrRoutes = [
   "/invoice/test-id",
 ];
 const apiRoutes = [
+  { path: "/api/health", expectAny: [200, 503] },
   { path: "/api/public/invoices/test-id/pdf", expectAny: [200, 404] },
   { path: "/api/public/webhooks/wise", method: "POST", expectAny: [400, 401, 415] },
 ];
