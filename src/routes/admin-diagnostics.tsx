@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { GlassCard } from "@/components/ui-premium/GlassCard";
 
-export const Route = createFileRoute("/admin/diagnostics")({
+export const Route = createFileRoute("/admin-diagnostics")({
   head: () => ({
     meta: [
       { title: "Diagnostics — Admin" },
