@@ -5,14 +5,16 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev",
-    "build": "vite build && node scripts/build-pages.mjs",
-    "build:dev": "vite build --mode development && node scripts/build-pages.mjs",
+    "clean": "node -e \"import('node:fs').then(fs=>{for(const p of ['dist','.wrangler'])fs.rmSync(p,{recursive:true,force:true})})\"",
+    "build": "npm run clean && vite build && node scripts/build-pages.mjs && node scripts/validate-pages-build.mjs",
+    "build:dev": "npm run clean && vite build --mode development && node scripts/build-pages.mjs && node scripts/validate-pages-build.mjs",
     "preview": "vite preview",
     "deploy": "npm run build && wrangler deploy -c dist/server/wrangler.json",
     "deploy:pages": "npm run build && wrangler pages deploy dist/pages",
     "cf:dev": "wrangler dev -c dist/server/wrangler.json",
     "cf:tail": "wrangler tail",
     "smoke-test": "node scripts/smoke-test.mjs",
+    "validate": "node scripts/validate-pages-build.mjs",
     "lint": "eslint .",
     "format": "prettier --write ."
   },
