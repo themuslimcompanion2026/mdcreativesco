@@ -86,6 +86,14 @@ await mkdir(outDir, { recursive: true });
 // wrangler.json files from the client build before assembling the Pages output.
 await removeIfExists(join(clientDir, "wrangler.json"), "generated client wrangler.json");
 
+// The @cloudflare/vite-plugin also writes .wrangler/deploy/config.json which
+// redirects wrangler to dist/client/wrangler.json. Since we deleted that file
+// (and deploy via Pages, not `wrangler deploy`), remove the redirect too —
+// otherwise Cloudflare Pages' post-build wrangler check fails with:
+//   "the redirected configuration path ... dist/client/wrangler.json does not exist"
+await removeIfExists(join(root, ".wrangler/deploy/config.json"), "stale .wrangler/deploy/config.json");
+await removeIfExists(join(root, ".wrangler"), ".wrangler cache directory");
+
 // 1. Copy static client assets to the Pages root
 await cp(clientDir, outDir, { recursive: true });
 
