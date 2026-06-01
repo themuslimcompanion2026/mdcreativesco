@@ -1,5 +1,11 @@
 # Cloudflare Deployment Guide — MD Creatives
 
+> ## ⚠️ MUST READ — most common cause of a deployed site showing "This page didn't load"
+>
+> Cloudflare's build log line **`Build environment variables: (none found)`** means your Pages project has NO env vars set. A successful upload is **not enough** — without these variables the live SSR worker has no way to talk to the backend and every request falls back to the branded 500 page.
+>
+> Go to **Cloudflare dashboard → your Pages project → Settings → Variables and Secrets** and add the variables from §2 below for **BOTH** the `Production` and `Preview` environments, then trigger a fresh deployment. After deploying, hit `/api/health` on your site to confirm everything is wired (it will list any still-missing vars).
+
 This project is a **TanStack Start + Vite** app. `vite build` (via `@cloudflare/vite-plugin`) produces an SSR Worker plus static client assets, and a postbuild step assembles a **Cloudflare Pages**-compatible directory at `dist/pages/`.
 
 You can deploy to either:
