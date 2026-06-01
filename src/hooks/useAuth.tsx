@@ -26,32 +26,54 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
       return;
     }
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
-      setSession(s);
-      setUser(s?.user ?? null);
-      if (s?.user) {
-        setTimeout(() => checkAdmin(s.user.id), 0);
-      } else {
-        setIsAdmin(false);
-      }
-    });
-    supabase.auth.getSession().then(({ data: { session: s } }) => {
-      setSession(s);
-      setUser(s?.user ?? null);
-      if (s?.user) checkAdmin(s.user.id);
+    // Wrap in try/catch so a missing/invalid Supabase config on the deployed
+    // host doesn't crash the entire app — the public site can still render.
+    let unsub: (() => void) | undefined;
+    try {
+      const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
+        setSession(s);
+        setUser(s?.user ?? null);
+        if (s?.user) {
+          setTimeout(() => checkAdmin(s.user.id), 0);
+        } else {
+          setIsAdmin(false);
+        }
+      });
+      unsub = () => sub.subscription.unsubscribe();
+      supabase.auth
+        .getSession()
+        .then(({ data: { session: s } }) => {
+          setSession(s);
+          setUser(s?.user ?? null);
+          if (s?.user) checkAdmin(s.user.id);
+          setLoading(false);
+        })
+        .catch((err) => {
+          console.warn("[useAuth] getSession failed:", err);
+          setLoading(false);
+        });
+    } catch (err) {
+      console.warn("[useAuth] auth init failed (backend not configured?):", err);
       setLoading(false);
-    });
-    return () => sub.subscription.unsubscribe();
+    }
+    return () => {
+      if (unsub) unsub();
+    };
   }, []);
 
   const checkAdmin = async (uid: string) => {
-    const { data } = await supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", uid)
-      .eq("role", "admin")
-      .maybeSingle();
-    setIsAdmin(!!data);
+    try {
+      const { data } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", uid)
+        .eq("role", "admin")
+        .maybeSingle();
+      setIsAdmin(!!data);
+    } catch (err) {
+      console.warn("[useAuth] checkAdmin failed:", err);
+      setIsAdmin(false);
+    }
   };
 
   const signIn = async (email: string, password: string) => {
